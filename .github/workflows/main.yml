@@ -30,8 +30,11 @@ jobs:
     - name: Package function
       run: |
         cd $(pwd)
-        zip -r updateCryptoPricesInNotion.zip venv/lib/python3.8/site-packages
+        cd venv/lib/python3.8/site-packages
+        zip -r ../../../../updateCryptoPricesInNotion.zip .
+        cd ../../../..
         zip -g updateCryptoPricesInNotion.zip lambda_function.py
+
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1
