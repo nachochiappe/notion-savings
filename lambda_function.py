@@ -24,21 +24,12 @@ def lambda_handler(event, context):
     # Get the database information
     crypto_database = requests.post(notion_db_url, headers=headers).json()
 
-    # List of cryptocurrencies to update in Notion
-    coins = []
-
-    # Iterate over each page in the database and add its Coin property to the coins list
-    for result in crypto_database["results"]:
-        coin = result["properties"]["Coin"]["select"]["name"]
-        coins.append(coin)
-
-    # Remove duplicates from the list of coins
-    unique_coins = list(set(coins))
+    # Iterate over each page in the database and add its Coin property to the coins list and remove duplicates from the list of coins
+    unique_coins = list(set([result["properties"]["Coin"]["select"]["name"] for result in crypto_database["results"]]))
 
     # Get the list of coins and their corresponding IDs
     coins_list_url = 'https://api.coingecko.com/api/v3/coins/list'
-    response = requests.get(coins_list_url)
-    coins_list = response.json()
+    coins_list = requests.get(coins_list_url).json()
 
     # Create a dictionary of symbol to ID value pairs
     symbol_to_id = {coin['symbol']: coin['id'] for coin in coins_list
@@ -51,14 +42,13 @@ def lambda_handler(event, context):
     coin_prices = {}
     
     # Get the prices of each coin in unique_coins using their corresponding IDs
-    coin_ids = [symbol_to_id.get(coin.lower(), None) for coin in unique_coins]
-    coin_ids = [coin_id for coin_id in coin_ids if coin_id]
+    coin_ids = [symbol_to_id.get(coin.lower()) for coin in unique_coins if symbol_to_id.get(coin.lower())]
     if coin_ids:
         crypto_url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(coin_ids)}&vs_currencies=usd"
         response = requests.get(crypto_url)
         data = response.json()
         for coin, coin_id in zip(unique_coins, coin_ids):
-            price = data.get(coin_id.lower(), {}).get('usd', 0)
+            price = data[coin_id.lower()]['usd'] if coin_id.lower() in data else 0
             coin_prices[coin] = price
 
     for result in crypto_database["results"]:
