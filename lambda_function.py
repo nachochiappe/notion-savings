@@ -1,7 +1,6 @@
 import requests
 import json
 import os
-import yfinance as yf
 
 def lambda_handler(event, context):
 
@@ -77,23 +76,12 @@ def lambda_handler(event, context):
         properties = result["properties"]
         response_crypto_price_update = requests.patch(notion_page_url, headers=headers, json={"properties": {"Price": properties["Price"]}})
 
-    # STOCKS
-    notion_db_url = f"https://api.notion.com/v1/databases/{stock_database_id}/query"
-    stock_database = requests.post(notion_db_url, headers=headers).json()
-    for result in stock_database["results"]:
-        page_id = result["id"]
-        notion_page_url = f"https://api.notion.com/v1/pages/{page_id}"
-        stock = result["properties"]["Stock"]["select"]["name"]
-        new_stock_price = yf.Ticker(stock).history(period='1d')['Close'][0]
-        result["properties"]["Price"]["number"] = new_stock_price
-        properties = result["properties"]
-        response_stock_price_update = requests.patch(notion_page_url, headers=headers, json={"properties": {"Price": properties["Price"]}})
-
     # Sum total of Fiat + Crypto + Stocks
 
     sum_fiat = 0
     sum_crypto = 0
     sum_stock = 0
+    notion_db_url = f"https://api.notion.com/v1/databases/{stock_database_id}/query"
     stock_database = requests.post(notion_db_url, headers=headers).json()
     for result in stock_database["results"]:
         sum_stock = sum_stock + result["properties"]["Total"]["formula"]["number"]
