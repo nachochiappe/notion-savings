@@ -35,28 +35,19 @@ def lambda_handler(event, context):
     # Remove duplicates from the list of coins
     unique_coins = list(set(coins))
 
-    # Obtener la lista de monedas y sus IDs correspondientes
+    # Get the list of coins and their corresponding IDs
     coins_list_url = 'https://api.coingecko.com/api/v3/coins/list'
     response = requests.get(coins_list_url)
     coins_list = response.json()
 
-    # Crear un diccionario de pares de valores (símbolo, ID)
-    symbol_to_id = {}
-    for coin in coins_list:
-        if coin['symbol'].upper() in unique_coins:
-            match coin['symbol']:
-                case 'dai':
-                    if coin['id'] != 'dai':
-                        continue
-                case 'mana':
-                    if coin['id'] != 'decentraland':
-                        continue
-                case 'eth':
-                    if coin['id'] != 'ethereum':
-                        continue
-            symbol_to_id[coin['symbol']] = coin['id']
+    # Create a dictionary of symbol to ID value pairs
+    symbol_to_id = {coin['symbol']: coin['id'] for coin in coins_list
+                    if coin['symbol'].upper() in unique_coins and 
+                    not ((coin['symbol'] == 'dai' and coin['id'] != 'dai') or 
+                        (coin['symbol'] == 'mana' and coin['id'] != 'decentraland') or 
+                        (coin['symbol'] == 'eth' and coin['id'] != 'ethereum'))}
 
-    # Obtener los precios de cada moneda en unique_coins utilizando sus IDs correspondientes
+    # Get the prices of each coin in unique_coins using their corresponding IDs
     coin_prices = {}
     for coin in unique_coins:
         coin_id = symbol_to_id.get(coin.lower(), None)
@@ -101,13 +92,12 @@ def lambda_handler(event, context):
     response_total_sum_update = requests.patch(notion_block_url, headers=headers, json={"callout": {"rich_text": callout["rich_text"]}})
 
     response = {
-        "stock_price_update_response": response_stock_price_update.json(),
         "crypto_price_update_response": response_crypto_price_update.json(),
         "total_sum_update_response": response_total_sum_update.json(),
     }
 
     status_code = 200
-    if response_stock_price_update.status_code != 200 or response_crypto_price_update.status_code != 200 or response_total_sum_update.status_code != 200:
+    if response_crypto_price_update.status_code != 200 or response_total_sum_update.status_code != 200:
         status_code = 400
 
     return {
