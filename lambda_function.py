@@ -14,23 +14,6 @@ def lambda_handler(event, context):
     notion_db_url = f"https://api.notion.com/v1/databases/{crypto_database_id}/query"
     notion_block_url = f"https://api.notion.com/v1/blocks/{block_id}"
 
-    # CRYPTO
-    # CoinGecko API endpoint for fetching latest crypto prices
-    crypto_url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,dai,chainlink,decentraland,the-graph,matic-network&vs_currencies=usd"
-
-    # Get the latest price of 7 cryptocurrencies
-    response = requests.get(crypto_url)
-    data = response.json()
-    coin_prices = {
-        "BTC": data["bitcoin"]["usd"],
-        "ETH": data["ethereum"]["usd"],
-        "DAI": data["dai"]["usd"],
-        "LINK": data["chainlink"]["usd"],
-        "MANA": data["decentraland"]["usd"],
-        "GRT": data["the-graph"]["usd"],
-        "MATIC": data["matic-network"]["usd"],
-    }
-
     # Notion headers
     headers = {
         "Authorization": 'Bearer ' + notion_api_key,
@@ -43,17 +26,56 @@ def lambda_handler(event, context):
     crypto_database = requests.post(notion_db_url, headers=headers).json()
 
     # List of cryptocurrencies to update in Notion
-    coins = ["BTC", "ETH", "DAI", "LINK", "MANA", "GRT", "MATIC"]
+    coins = []
+
+    # Iterate over each page in the database and add its Coin property to the coins list
+    for result in crypto_database["results"]:
+        coin = result["properties"]["Coin"]["select"]["name"]
+        coins.append(coin)
+
+    # Remove duplicates from the list of coins
+    unique_coins = list(set(coins))
+
+    # Obtener la lista de monedas y sus IDs correspondientes
+    coins_list_url = 'https://api.coingecko.com/api/v3/coins/list'
+    response = requests.get(coins_list_url)
+    coins_list = response.json()
+
+    # Crear un diccionario de pares de valores (símbolo, ID)
+    symbol_to_id = {}
+    for coin in coins_list:
+        if coin['symbol'].upper() in unique_coins:
+            match coin['symbol']:
+                case 'dai':
+                    if coin['id'] != 'dai':
+                        continue
+                case 'mana':
+                    if coin['id'] != 'decentraland':
+                        continue
+                case 'eth':
+                    if coin['id'] != 'ethereum':
+                        continue
+            symbol_to_id[coin['symbol']] = coin['id']
+
+    # Obtener los precios de cada moneda en unique_coins utilizando sus IDs correspondientes
+    coin_prices = {}
+    for coin in unique_coins:
+        coin_id = symbol_to_id.get(coin.lower(), None)
+        if coin_id:
+            crypto_url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+            response = requests.get(crypto_url)
+            data = response.json()
+            price = data.get(coin_id.lower(), {}).get('usd', 0)
+            coin_prices[coin] = price
 
     for result in crypto_database["results"]:
         page_id = result["id"]
         notion_page_url = f"https://api.notion.com/v1/pages/{page_id}"
         coin = result["properties"]["Coin"]["select"]["name"]
-        if coin in coins:
-            new_price = coin_prices.get(coin, 0)
-            result["properties"]["Price"]["number"] = new_price
-            properties = result["properties"]
-            response_crypto_price_update = requests.patch(notion_page_url, headers=headers, json={"properties": {"Price": properties["Price"]}})
+        new_price = coin_prices.get(coin, 0)
+        result["properties"]["Price"]["number"] = new_price
+        properties = result["properties"]
+        response_crypto_price_update = requests.patch(notion_page_url, headers=headers, json={"properties": {"Price": properties["Price"]}})
 
     # STOCKS
     notion_db_url = f"https://api.notion.com/v1/databases/{stock_database_id}/query"
