@@ -47,14 +47,17 @@ def lambda_handler(event, context):
                         (coin['symbol'] == 'mana' and coin['id'] != 'decentraland') or 
                         (coin['symbol'] == 'eth' and coin['id'] != 'ethereum'))}
 
-    # Get the prices of each coin in unique_coins using their corresponding IDs
+    # Initialize an empty dictionary to store coin prices
     coin_prices = {}
-    for coin in unique_coins:
-        coin_id = symbol_to_id.get(coin.lower(), None)
-        if coin_id:
-            crypto_url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
-            response = requests.get(crypto_url)
-            data = response.json()
+    
+    # Get the prices of each coin in unique_coins using their corresponding IDs
+    coin_ids = [symbol_to_id.get(coin.lower(), None) for coin in unique_coins]
+    coin_ids = [coin_id for coin_id in coin_ids if coin_id]
+    if coin_ids:
+        crypto_url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(coin_ids)}&vs_currencies=usd"
+        response = requests.get(crypto_url)
+        data = response.json()
+        for coin, coin_id in zip(unique_coins, coin_ids):
             price = data.get(coin_id.lower(), {}).get('usd', 0)
             coin_prices[coin] = price
 
