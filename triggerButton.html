@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Trigger Lambda Function</title>
+  </head>
+  <body>
+    <button onclick="triggerLambda()">Trigger Lambda Function</button>
+
+    <script>
+      function triggerLambda() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "https://3c51yqxng9.execute-api.us-east-1.amazonaws.com/default/updateCryptoPricesInNotion", true);
+        xhr.send();
+      }
+    </script>
+  </body>
+</html>
