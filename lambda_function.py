@@ -38,7 +38,7 @@ def lambda_handler(event, context):
                         (coin['symbol'] == 'mana' and coin['id'] != 'decentraland') or 
                         (coin['symbol'] == 'eth' and coin['id'] != 'ethereum') or
                         (coin['symbol'] == 'btc' and coin['id'] != 'bitcoin') or
-                        (coin['symbol'] == 'eth' and coin['id'] != 'tether'))}
+                        (coin['symbol'] == 'usdt' and coin['id'] != 'tether'))}
 
     # Initialize an empty dictionary to store coin prices
     coin_prices = {}
