@@ -134,7 +134,6 @@ def lambda_handler(event, context):
         notion_db_url = f"https://api.notion.com/v1/databases/{stock_database_id}/query"
         stock_database = requests.post(notion_db_url, headers=headers).json()
         unique_stocks = list(set([result["properties"]["Stock"]["select"]["name"] for result in stock_database["results"]]))
-        print(unique_stocks)
         stock_prices = fetch_stock_prices(unique_stocks, alpha_vantage_api_key)
         if stock_prices:
             update_notion_prices("stock", stock_database["results"], stock_prices, headers)
