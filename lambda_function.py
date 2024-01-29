@@ -1,9 +1,10 @@
-if os.environ.get('ENVIRONMENT') != 'production':
-    from dotenv import load_dotenv
-    load_dotenv()
 import requests
 import os
 import datetime
+
+if os.environ.get('ENVIRONMENT') != 'production':
+    from dotenv import load_dotenv
+    load_dotenv()
 
 def fetch_crypto_prices(unique_coins):
     coins_list_url = 'https://api.coingecko.com/api/v3/coins/list'
@@ -51,20 +52,21 @@ def create_symbol_to_id_mapping(coins_list, unique_coins):
 def fetch_stock_prices(unique_stocks, alpha_vantage_api_key):
     stock_prices = {}
     for stock_symbol in unique_stocks:
-        alpha_vantage_url = f"https://www.alphavantage.co/query?apikey={alpha_vantage_api_key}&function=GLOBAL_QUOTE&symbol={stock_symbol}"
-        response = requests.get(alpha_vantage_url)
-        if response.status_code == 200:
-            data = response.json()
-            # Check if the response contains the expected 'Global Quote' data
-            if "Global Quote" in data:
-                latest_price = data["Global Quote"]["05. price"]
-                stock_prices[stock_symbol] = latest_price
-            elif "Information" in data:
-                # Handle the case where rate limit message is received
-                print(f"Rate limit exceeded or other information received: {data['Information']}")
-                break  # Optionally break out of the loop if rate limit is hit
-        else:
-            print(f"Failed to retrieve data for {stock_symbol}")
+        if stock_symbol != 'USD':
+            alpha_vantage_url = f"https://www.alphavantage.co/query?apikey={alpha_vantage_api_key}&function=GLOBAL_QUOTE&symbol={stock_symbol}"
+            response = requests.get(alpha_vantage_url)
+            if response.status_code == 200:
+                data = response.json()
+                # Check if the response contains the expected 'Global Quote' data
+                if "Global Quote" in data:
+                    latest_price = data["Global Quote"]["05. price"]
+                    stock_prices[stock_symbol] = latest_price
+                elif "Information" in data:
+                    # Handle the case where rate limit message is received
+                    print(f"Rate limit exceeded or other information received: {data['Information']}")
+                    break  # Optionally break out of the loop if rate limit is hit
+            else:
+                print(f"Failed to retrieve data for {stock_symbol}")
     return stock_prices
 
 
@@ -132,6 +134,7 @@ def lambda_handler(event, context):
         notion_db_url = f"https://api.notion.com/v1/databases/{stock_database_id}/query"
         stock_database = requests.post(notion_db_url, headers=headers).json()
         unique_stocks = list(set([result["properties"]["Stock"]["select"]["name"] for result in stock_database["results"]]))
+        print(unique_stocks)
         stock_prices = fetch_stock_prices(unique_stocks, alpha_vantage_api_key)
         if stock_prices:
             update_notion_prices("stock", stock_database["results"], stock_prices, headers)
