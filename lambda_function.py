@@ -44,7 +44,8 @@ def create_symbol_to_id_mapping(coins_list, unique_coins):
             (symbol == 'mana' and coin_id != 'decentraland') or
             (symbol == 'eth' and coin_id != 'ethereum') or
             (symbol == 'btc' and coin_id != 'bitcoin') or
-            (symbol == 'usdt' and coin_id != 'tether')
+            (symbol == 'usdt' and coin_id != 'tether') or
+            (symbol == 'bnb' and coin_id != 'binancecoin')
         ):
             symbol_to_id[symbol] = coin_id
     return symbol_to_id
