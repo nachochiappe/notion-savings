@@ -134,12 +134,12 @@ def lambda_handler(event, context):
     }
 
     # CRYPTOCURRENCY PRICES
-    # notion_db_url = f"https://api.notion.com/v1/databases/{crypto_database_id}/query"
-    # crypto_database = requests.post(notion_db_url, headers=headers).json()
-    # unique_coins = list(set([result["properties"]["Coin"]["select"]["name"] for result in crypto_database["results"]]))
-    # crypto_prices = fetch_crypto_prices(unique_coins)
-    # if crypto_prices:
-    #     update_notion_prices("crypto", crypto_database["results"], crypto_prices, headers)
+    notion_db_url = f"https://api.notion.com/v1/databases/{crypto_database_id}/query"
+    crypto_database = requests.post(notion_db_url, headers=headers).json()
+    unique_coins = list(set([result["properties"]["Coin"]["select"]["name"] for result in crypto_database["results"]]))
+    crypto_prices = fetch_crypto_prices(unique_coins)
+    if crypto_prices:
+        update_notion_prices("crypto", crypto_database["results"], crypto_prices, headers)
 
     # STOCK PRICES
     # Get current UTC hour
