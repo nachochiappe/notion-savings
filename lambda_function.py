@@ -146,7 +146,7 @@ def lambda_handler(event, context):
     current_utc_hour = datetime.datetime.utcnow().hour
 
     # Define the hour at which to perform the stock price update (e.g., 11 UTC)
-    stock_update_hour = 12
+    stock_update_hour = 11
 
     # Only execute stock price update if the current hour matches the specified hour
     if current_utc_hour == stock_update_hour:
