@@ -6,6 +6,10 @@ if os.environ.get('ENVIRONMENT') != 'production':
     from dotenv import load_dotenv
     load_dotenv()
 
+GLOBAL_QUOTE_LITERAL = "Global Quote"
+PRICE_LITERAL = "05. price"
+INFO_LITERAL = "Information"
+
 def fetch_crypto_prices(unique_coins):
     coins_list_url = 'https://api.coingecko.com/api/v3/coins/list'
     coins_list_response = requests.get(coins_list_url)
@@ -51,25 +55,39 @@ def create_symbol_to_id_mapping(coins_list, unique_coins):
     return symbol_to_id
 
 def fetch_stock_prices(unique_stocks, alpha_vantage_api_key):
-    stock_prices = {}
+    stock_prices = {'USD': 1.00}  # Initialize with a value for USD
     for stock_symbol in unique_stocks:
         if stock_symbol != 'USD':
-            alpha_vantage_url = f"https://www.alphavantage.co/query?apikey={alpha_vantage_api_key}&function=GLOBAL_QUOTE&symbol={stock_symbol}"
-            response = requests.get(alpha_vantage_url)
-            if response.status_code == 200:
-                data = response.json()
-                # Check if the response contains the expected 'Global Quote' data
-                if "Global Quote" in data:
-                    latest_price = data["Global Quote"]["05. price"]
-                    stock_prices[stock_symbol] = latest_price
-                elif "Information" in data:
-                    # Handle the case where rate limit message is received
-                    print(f"Rate limit exceeded or other information received: {data['Information']}")
-                    break  # Optionally break out of the loop if rate limit is hit
-            else:
-                print(f"Failed to retrieve data for {stock_symbol}")
+            price = get_stock_price(stock_symbol, alpha_vantage_api_key)
+            if price is not None:
+                stock_prices[stock_symbol] = price
     return stock_prices
 
+def get_stock_price(stock_symbol, alpha_vantage_api_key):
+    if stock_symbol == 'CSPX':
+        stock_symbol = 'CSPX.LON'  # Adjust the symbol for CSPX
+    alpha_vantage_url = build_url(stock_symbol, alpha_vantage_api_key)
+    response = requests.get(alpha_vantage_url)
+    return handle_response(response)
+
+def build_url(stock_symbol, alpha_vantage_api_key):
+    return f"https://www.alphavantage.co/query?apikey={alpha_vantage_api_key}&function=GLOBAL_QUOTE&symbol={stock_symbol}"
+
+def handle_response(response):
+    if response.status_code != 200:
+        print("Failed to retrieve data")
+        return None
+
+    data = response.json()
+    return parse_data(data)
+
+def parse_data(data):
+    if GLOBAL_QUOTE_LITERAL in data:
+        global_quote = data[GLOBAL_QUOTE_LITERAL]
+        return global_quote.get(PRICE_LITERAL)
+    elif INFO_LITERAL in data:
+        print(f"Rate limit exceeded or other information received: {data[INFO_LITERAL]}")
+        return None
 
 def update_notion_prices(type, database_results, prices, headers):
     for result in database_results:
