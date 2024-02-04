@@ -87,7 +87,7 @@ def parse_data(data):
         return global_quote.get(PRICE_LITERAL)
     elif INFO_LITERAL in data:
         print(f"Rate limit exceeded or other information received: {data[INFO_LITERAL]}")
-        return None
+    return None
 
 def update_notion_prices(type, database_results, prices, headers):
     for result in database_results:
