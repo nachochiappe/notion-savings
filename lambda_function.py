@@ -97,11 +97,12 @@ def update_notion_prices(type, database_results, prices, headers):
             symbol = result["properties"]["Coin"]["select"]["name"]
         else:
             symbol = result["properties"]["Stock"]["select"]["name"]
+        current_price = result["properties"]["Price"]["number"]
         new_price = prices.get(symbol, 0)
         update_payload = {
             "properties": {
                 "Price": {
-                    "number": float(new_price) if new_price else None
+                    "number": float(new_price) if new_price else current_price
                 }
             }
         }
@@ -146,6 +147,7 @@ def lambda_handler(event, context):
     current_utc_hour = datetime.datetime.utcnow().hour
 
     # Define the hour at which to perform the stock price update (e.g., 11 UTC)
+    # This is because the free tier of the API has a limit of 25 requests per day
     stock_update_hour = 11
 
     # Only execute stock price update if the current hour matches the specified hour
