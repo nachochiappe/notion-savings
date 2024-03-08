@@ -12,10 +12,12 @@ INFO_LITERAL = "Information"
 
 def fetch_crypto_prices(unique_coins):
     coins_list_url = 'https://api.coingecko.com/api/v3/coins/list'
+    print("Retrieving coins list from CoinGecko")
     coins_list_response = requests.get(coins_list_url)
     if coins_list_response.status_code != 200:
         print("Failed to retrieve coins list from CoinGecko")
         return {}
+    print("Coins list retrieved successfully")
 
     coins_list = coins_list_response.json()
 
@@ -25,10 +27,12 @@ def fetch_crypto_prices(unique_coins):
     coin_ids = [symbol_to_id.get(coin.lower()) for coin in unique_coins if symbol_to_id.get(coin.lower())]
     if coin_ids:
         crypto_price_url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(coin_ids)}&vs_currencies=usd"
+        print("Retrieving prices from CoinGecko")
         crypto_price_response = requests.get(crypto_price_url)
         if crypto_price_response.status_code != 200:
             print("Failed to retrieve prices from CoinGecko")
             return {}
+        print("Prices retrieved successfully from CoinGecko")
 
         price_data = crypto_price_response.json()
         for coin in unique_coins:
@@ -60,6 +64,7 @@ def fetch_stock_prices(unique_stocks, alpha_vantage_api_key):
         if stock_symbol != 'USD':
             price = get_stock_price(stock_symbol, alpha_vantage_api_key)
             if price is not None:
+                print("Successfully fetched price for stock " + stock_symbol + ". New price: " + str(price))
                 stock_prices[stock_symbol] = price
     return stock_prices
 
@@ -67,6 +72,7 @@ def get_stock_price(stock_symbol, alpha_vantage_api_key):
     if stock_symbol == 'CSPX':
         stock_symbol = 'CSPX.LON'  # Adjust the symbol for CSPX
     alpha_vantage_url = build_url(stock_symbol, alpha_vantage_api_key)
+    print("Fetching stock price for " + stock_symbol)
     response = requests.get(alpha_vantage_url)
     return handle_response(response)
 
@@ -75,7 +81,7 @@ def build_url(stock_symbol, alpha_vantage_api_key):
 
 def handle_response(response):
     if response.status_code != 200:
-        print("Failed to retrieve data")
+        print("Failed to retrieve data from AlphaVantage")
         return None
 
     data = response.json()
@@ -106,9 +112,11 @@ def update_notion_prices(type, database_results, prices, headers):
                 }
             }
         }
+        print("Updating price in Notion for " + symbol)
         requests.patch(notion_page_url, headers=headers, json=update_payload)
 
 def calculate_total_assets(databases, headers):
+    print("Calculating total assets")
     total = 0
     for database_id in databases:
         notion_db_url = f"https://api.notion.com/v1/databases/{database_id}/query"
@@ -136,6 +144,7 @@ def lambda_handler(event, context):
 
     # CRYPTOCURRENCY PRICES
     notion_db_url = f"https://api.notion.com/v1/databases/{crypto_database_id}/query"
+    print("Getting CRYPTO database information")
     crypto_database = requests.post(notion_db_url, headers=headers).json()
     unique_coins = list(set([result["properties"]["Coin"]["select"]["name"] for result in crypto_database["results"]]))
     crypto_prices = fetch_crypto_prices(unique_coins)
@@ -158,6 +167,8 @@ def lambda_handler(event, context):
         stock_prices = fetch_stock_prices(unique_stocks, alpha_vantage_api_key)
         if stock_prices:
             update_notion_prices("stock", stock_database["results"], stock_prices, headers)
+    else:
+        print("Skipping stock price updates")
 
     # CALCULATE TOTAL ASSETS
     block_id = os.environ['TOTAL_CALLOUT_BLOCK_ID']
@@ -166,6 +177,7 @@ def lambda_handler(event, context):
     block = requests.get(notion_block_url, headers=headers).json()
     block["callout"]["rich_text"][1]["text"]["content"] = f": ${total_assets:.2f}"
     callout = block["callout"]
+    print("Updating total assets")
     requests.patch(notion_block_url, headers=headers, json={"callout": {"rich_text": callout["rich_text"]}})
 
 # Main execution
