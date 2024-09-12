@@ -38,7 +38,11 @@ def fetch_crypto_prices(unique_coins):
         for coin in unique_coins:
             coin_id = symbol_to_id.get(coin.lower())
             if coin_id and coin_id.lower() in price_data:
-                coin_prices[coin] = price_data[coin_id.lower()]['usd']
+                usd_price = price_data[coin_id.lower()].get('usd')
+                if usd_price is not None:
+                    coin_prices[coin] = usd_price
+                else:
+                    print(f"Warning: USD price not available for {coin}")
 
     return coin_prices
 
