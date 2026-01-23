@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 env:
   aws-region: us-east-1
@@ -27,7 +30,13 @@ jobs:
         source venv/bin/activate
         pip install -r requirements.txt
 
+    - name: Run tests
+      run: |
+        source venv/bin/activate
+        pytest
+
     - name: Package function
+      if: github.event_name == 'push'
       run: |
         cd $(pwd)
         cd venv/lib/python3.8/site-packages
@@ -37,12 +46,14 @@ jobs:
 
 
     - name: Configure AWS Credentials
+      if: github.event_name == 'push'
       uses: aws-actions/configure-aws-credentials@v1-node16
       with:
         aws-region: ${{ env.aws-region }}
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    
+     
     - name: Deploy to AWS Lambda
+      if: github.event_name == 'push'
       run: |
         aws lambda update-function-code --function-name updateCryptoPricesInNotion --zip-file fileb://updateCryptoPricesInNotion.zip
