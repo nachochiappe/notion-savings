@@ -165,6 +165,10 @@ def parse_data(data):
         print(f"Rate limit exceeded or other information received: {data[INFO_LITERAL]}")
     return None
 
+def get_stock_amount(result):
+    amount = result.get("properties", {}).get("Amount", {}).get("number")
+    return amount if isinstance(amount, (int, float)) else 0
+
 def update_notion_prices(type, database_results, prices, headers, session):
     for result in database_results:
         page_id = result["id"]
@@ -271,10 +275,20 @@ def lambda_handler(event, context):
     # Only execute stock price update if the current hour matches the specified hour
     if current_utc_hour == stock_update_hour:
         stock_results = query_notion_database(stock_database_id, headers, session)
-        unique_stocks = list(set([result["properties"]["Stock"]["select"]["name"] for result in stock_results]))
+        filtered_stock_results = [
+            result for result in stock_results
+            if get_stock_amount(result) > 0
+        ]
+        filtered_out_count = len(stock_results) - len(filtered_stock_results)
+        if filtered_out_count:
+            print(f"Skipping {filtered_out_count} stock entries with Amount <= 0")
+        unique_stocks = list(set([
+            result["properties"]["Stock"]["select"]["name"]
+            for result in filtered_stock_results
+        ]))
         stock_prices = fetch_stock_prices(unique_stocks, alpha_vantage_api_key, session)
         if stock_prices:
-            update_notion_prices("stock", stock_results, stock_prices, headers, session)
+            update_notion_prices("stock", filtered_stock_results, stock_prices, headers, session)
     else:
         print("Skipping stock price updates")
 
