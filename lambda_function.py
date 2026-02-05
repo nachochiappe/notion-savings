@@ -196,12 +196,27 @@ def get_stock_amount(result):
     return amount if isinstance(amount, (int, float)) else 0
 
 
+def get_select_name(result, property_name):
+    properties = result.get("properties", {})
+    select = properties.get(property_name, {}).get("select")
+    if not isinstance(select, dict):
+        return None
+    name = select.get("name")
+    return name if isinstance(name, str) and name else None
+
+
 def update_notion_prices(type, database_results, prices, headers, session):
     for result in database_results:
         page_id = result["id"]
         notion_page_url = f"https://api.notion.com/v1/pages/{page_id}"
         if type == "crypto":
-            symbol = result["properties"]["Coin"]["select"]["name"]
+            symbol = get_select_name(result, "Coin")
+            if not symbol:
+                print(
+                    "Warning: Skipping crypto entry with missing Coin select. Page id: "
+                    + page_id
+                )
+                continue
         else:
             symbol = result["properties"]["Stock"]["select"]["name"]
         current_price = result["properties"]["Price"]["number"]
@@ -302,14 +317,18 @@ def lambda_handler(event, context):
     # CRYPTOCURRENCY PRICES
     print("Getting CRYPTO database information")
     crypto_results = query_notion_database(crypto_database_id, headers, session)
-    unique_coins = list(
-        set(
-            [
-                result["properties"]["Coin"]["select"]["name"]
-                for result in crypto_results
-            ]
-        )
-    )
+    unique_coins_set = set()
+    for result in crypto_results:
+        coin_name = get_select_name(result, "Coin")
+        if coin_name:
+            unique_coins_set.add(coin_name)
+        else:
+            page_id = result.get("id", "unknown")
+            print(
+                "Warning: Skipping crypto entry with missing Coin select. Page id: "
+                + page_id
+            )
+    unique_coins = list(unique_coins_set)
     crypto_prices = fetch_crypto_prices(unique_coins, session)
     if crypto_prices:
         update_notion_prices("crypto", crypto_results, crypto_prices, headers, session)
