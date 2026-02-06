@@ -1,6 +1,8 @@
 import datetime
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -16,6 +18,9 @@ PRICE_LITERAL = "05. price"
 INFO_LITERAL = "Information"
 DEFAULT_TIMEOUT_SECONDS = 10
 COINGECKO_SYMBOL_CACHE = None
+DEFAULT_NOTION_UPDATE_MAX_WORKERS = 4
+DEFAULT_NOTION_UPDATE_RPS_LIMIT = 2.5
+DEFAULT_NOTION_UPDATE_BURST = 1
 
 
 def create_session():
@@ -205,7 +210,64 @@ def get_select_name(result, property_name):
     return name if isinstance(name, str) and name else None
 
 
-def update_notion_prices(type, database_results, prices, headers, session):
+def parse_int_env(name, default, minimum):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        print(f"Invalid value for {name}: {value}. Using default {default}.")
+        return default
+    if parsed < minimum:
+        print(
+            f"Value for {name} below minimum {minimum}: {parsed}. Using default {default}."
+        )
+        return default
+    return parsed
+
+
+def parse_float_env(name, default, minimum):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        print(f"Invalid value for {name}: {value}. Using default {default}.")
+        return default
+    if parsed < minimum:
+        print(
+            f"Value for {name} below minimum {minimum}: {parsed}. Using default {default}."
+        )
+        return default
+    return parsed
+
+
+class RateLimiter:
+    def __init__(self, rps_limit, burst):
+        self.interval = 1.0 / rps_limit if rps_limit > 0 else 0
+        self.burst = max(1, burst)
+        self._lock = Lock()
+        self._next_allowed_at = time.monotonic()
+
+    def wait_for_slot(self):
+        if self.interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            floor = now - ((self.burst - 1) * self.interval)
+            if self._next_allowed_at < floor:
+                self._next_allowed_at = floor
+            delay = self._next_allowed_at - now
+            if delay > 0:
+                time.sleep(delay)
+                now = time.monotonic()
+            self._next_allowed_at = max(self._next_allowed_at, now) + self.interval
+
+
+def build_update_jobs(type, database_results, prices):
+    jobs = []
     for result in database_results:
         page_id = result["id"]
         notion_page_url = f"https://api.notion.com/v1/pages/{page_id}"
@@ -231,10 +293,81 @@ def update_notion_prices(type, database_results, prices, headers, session):
                 }
             }
         }
-        print("Updating price in Notion for " + symbol)
-        request_status(
-            session, "PATCH", notion_page_url, headers=headers, payload=update_payload
+        jobs.append(
+            {
+                "page_id": page_id,
+                "symbol": symbol,
+                "url": notion_page_url,
+                "payload": update_payload,
+            }
         )
+    return jobs
+
+
+def rate_limited_request_status(limiter, session, method, url, headers=None, payload=None):
+    limiter.wait_for_slot()
+    start = time.monotonic()
+    success = request_status(
+        session, method, url, headers=headers, payload=payload
+    )
+    return success, round(time.monotonic() - start, 3)
+
+
+def run_notion_updates_concurrently(jobs, headers, session, max_workers, limiter):
+    outcomes = {"ok": 0, "fail": 0}
+
+    def worker(job):
+        print("Updating price in Notion for " + job["symbol"])
+        ok, elapsed = rate_limited_request_status(
+            limiter,
+            session,
+            "PATCH",
+            job["url"],
+            headers=headers,
+            payload=job["payload"],
+        )
+        status = "ok" if ok else "fail"
+        print(
+            f"Notion update outcome for {job['symbol']}: {status} "
+            f"(page_id={job['page_id']}, elapsed={elapsed}s)"
+        )
+        return ok
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(worker, job) for job in jobs]
+        for future in as_completed(futures):
+            if future.result():
+                outcomes["ok"] += 1
+            else:
+                outcomes["fail"] += 1
+    return outcomes
+
+
+def update_notion_prices(type, database_results, prices, headers, session):
+    jobs = build_update_jobs(type, database_results, prices)
+    if not jobs:
+        print("No Notion updates to apply")
+        return
+
+    max_workers = parse_int_env(
+        "NOTION_UPDATE_MAX_WORKERS", DEFAULT_NOTION_UPDATE_MAX_WORKERS, 1
+    )
+    rps_limit = parse_float_env(
+        "NOTION_UPDATE_RPS_LIMIT", DEFAULT_NOTION_UPDATE_RPS_LIMIT, 0.1
+    )
+    burst = parse_int_env("NOTION_UPDATE_BURST", DEFAULT_NOTION_UPDATE_BURST, 1)
+    limiter = RateLimiter(rps_limit, burst)
+
+    print(
+        f"Starting Notion updates: count={len(jobs)}, workers={max_workers}, "
+        f"rps_limit={rps_limit}, burst={burst}"
+    )
+    outcomes = run_notion_updates_concurrently(
+        jobs, headers, session, max_workers, limiter
+    )
+    print(
+        f"Completed Notion updates: ok={outcomes['ok']}, fail={outcomes['fail']}"
+    )
 
 
 def query_notion_database(database_id, headers, session):
