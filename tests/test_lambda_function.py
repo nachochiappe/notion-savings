@@ -46,12 +46,9 @@ class UpdateTotalAssetsCalloutTests(unittest.TestCase):
         block_response = {
             "callout": {"rich_text": [{"type": "text", "text": {"content": "Total"}}]}
         }
-        with (
-            mock.patch("lambda_function.request_json", return_value=block_response),
-            mock.patch(
-                "lambda_function.request_status", return_value=True
-            ) as status_mock,
-        ):
+        with mock.patch(
+            "lambda_function.request_json", return_value=block_response
+        ), mock.patch("lambda_function.request_status", return_value=True) as status_mock:
             lambda_function.update_total_assets_callout(
                 "block-id", 42.5, {"h": "v"}, mock.Mock()
             )
@@ -124,10 +121,9 @@ class UpdateNotionPricesTests(unittest.TestCase):
     @mock.patch.dict(os.environ, {}, clear=True)
     def test_update_notion_prices_uses_defaults(self):
         jobs = [{"symbol": "BTC", "page_id": "page-1", "url": "u", "payload": {}}]
-        with (
-            mock.patch("lambda_function.build_update_jobs", return_value=jobs),
-            mock.patch("lambda_function.run_notion_updates_concurrently") as run_mock,
-        ):
+        with mock.patch(
+            "lambda_function.build_update_jobs", return_value=jobs
+        ), mock.patch("lambda_function.run_notion_updates_concurrently") as run_mock:
             lambda_function.update_notion_prices(
                 "crypto", [], {"BTC": 1.0}, {"h": "v"}, mock.Mock()
             )
@@ -138,10 +134,9 @@ class UpdateNotionPricesTests(unittest.TestCase):
         self.assertEqual(limiter.burst, 1)
 
     def test_update_notion_prices_no_jobs(self):
-        with (
-            mock.patch("lambda_function.build_update_jobs", return_value=[]),
-            mock.patch("lambda_function.run_notion_updates_concurrently") as run_mock,
-        ):
+        with mock.patch(
+            "lambda_function.build_update_jobs", return_value=[]
+        ), mock.patch("lambda_function.run_notion_updates_concurrently") as run_mock:
             lambda_function.update_notion_prices(
                 "crypto", [], {"BTC": 1.0}, {"h": "v"}, mock.Mock()
             )
@@ -152,10 +147,9 @@ class RateLimiterTests(unittest.TestCase):
     def test_rate_limiter_enforces_interval(self):
         limiter = lambda_function.RateLimiter(rps_limit=2.0, burst=1)
         limiter._next_allowed_at = 0.0
-        with (
-            mock.patch("lambda_function.time.monotonic", side_effect=[0.0, 0.0, 0.5]),
-            mock.patch("lambda_function.time.sleep") as sleep_mock,
-        ):
+        with mock.patch(
+            "lambda_function.time.monotonic", side_effect=[0.0, 0.0, 0.5]
+        ), mock.patch("lambda_function.time.sleep") as sleep_mock:
             limiter.wait_for_slot()
             limiter.wait_for_slot()
         sleep_mock.assert_called_once_with(0.5)
